@@ -112,8 +112,16 @@
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ ref: "main", inputs }),
       });
-      if (resp.status === 404) throw new Error("Workflow file not found on main branch.");
-      if (!resp.ok) throw new Error(`Dispatch failed (${resp.status}). Check the Worker is deployed.`);
+      if (!resp.ok) {
+        let detail = "";
+        try { detail = await resp.text(); } catch (_) {}
+        const hint = resp.status === 404
+          ? "Workflow file not found on main branch."
+          : resp.status === 422
+            ? "GitHub rejected the dispatch (422). Check: Actions are enabled in repo Settings → Actions, and the GH_TOKEN has 'workflow' scope."
+            : `Dispatch failed (${resp.status}).`;
+        throw new Error(detail ? `${hint}\n\nGitHub says: ${detail}` : hint);
+      }
     } catch (err) {
       showError(err.message, null);
       setLoading(false);
