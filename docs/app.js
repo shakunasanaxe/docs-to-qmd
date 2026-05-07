@@ -4,9 +4,14 @@
   "use strict";
 
   // ── Config ──────────────────────────────────────────────────────────────────
-  // After connecting to Render, paste the service URL here.
-  // Format: https://your-service-name.onrender.com
-  const API_BASE = "https://takshashila-qmd-converter.onrender.com";
+  // After deploying the Cloudflare Worker, paste its URL here and push.
+  // Format: https://tsh-converter-proxy.YOUR-SUBDOMAIN.workers.dev
+  const WORKER_URL = "https://tsh-converter-proxy.takshshila-tools.workers.dev";
+
+  const POLL_INTERVAL    = 8_000;     // ms between ZIP-ready checks
+  const POLL_TIMEOUT     = 1_200_000; // 20 min hard limit
+  const FIND_RUN_TIMEOUT = 180_000;   // 3 min to find the Actions run ID
+  const FIND_RUN_INTERVAL= 5_000;
 
   // ── DOM refs ────────────────────────────────────────────────────────────────
   const form       = document.getElementById("convertForm");
@@ -17,12 +22,15 @@
 
   const progressArea = document.getElementById("progressArea");
   const progressMsg  = document.getElementById("progressMsg");
+  const actionsLink  = document.getElementById("actionsLink");
 
   const resultArea       = document.getElementById("resultArea");
   const successCard      = document.getElementById("successCard");
   const errorCard        = document.getElementById("errorCard");
   const resultMsg        = document.getElementById("resultMsg");
   const errorMsg         = document.getElementById("errorMsg");
+  const dlZip            = document.getElementById("dlZip");
+  const errorActionsLink = document.getElementById("errorActionsLink");
 
   // ── Mode toggle ─────────────────────────────────────────────────────────────
   const modeRadios = document.querySelectorAll('input[name="mode"]');
@@ -38,20 +46,14 @@
     document.querySelectorAll(".blog-only").forEach(el => {
       el.style.display = mode === "blog" ? "" : "none";
     });
-
-    // Update step 3 heading
     const step3Title = document.querySelector(".step3-title");
     if (step3Title) {
-      step3Title.textContent = mode === "paper"
-        ? "Output Settings"
-        : "Blog Slug";
+      step3Title.textContent = mode === "paper" ? "Output Settings" : "Blog Slug";
     }
   }
 
-  modeRadios.forEach(r => {
-    r.addEventListener("change", () => applyDocMode(currentMode()));
-  });
-  applyDocMode(currentMode()); // on load
+  modeRadios.forEach(r => r.addEventListener("change", () => applyDocMode(currentMode())));
+  applyDocMode(currentMode());
 
   // Prefill today's date
   const dateInput = document.getElementById("date");
@@ -65,53 +67,143 @@
     const mode = currentMode();
     if (!validateForm(mode)) return;
 
+    const runToken = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
     setLoading(true);
     hideResults();
-    showProgress(
-      mode === "blog"
-        ? "Converting blog post (~1–2 min)…"
-        : "Converting document and rendering PDF (~2–5 min)…"
-    );
+    showProgress("Queuing job on GitHub Actions…");
 
+    // ── Build inputs for the workflow ───────────────────────────────────────
     const fd = new FormData(form);
-    // Ensure mode is in the payload
-    fd.set("mode", mode);
+    const inputs = {
+      google_doc_url: fd.get("google_doc_url"),
+      mode:           mode,
+      title:          fd.get("title"),
+      authors:        fd.get("authors")    || "",
+      date:           fd.get("date")       || "",
+      categories:     fd.get("categories") || "",
+      run_token:      runToken,
+    };
 
-    let zip_blob, filename;
+    if (mode === "paper") {
+      inputs.subtitle   = fd.get("subtitle")   || "";
+      inputs.tldr       = fd.get("tldr")       || "";
+      inputs.doctype    = fd.get("doctype")    || "";
+      inputs.docversion = fd.get("docversion") || "";
+      inputs.pdf_filename = fd.get("pdf_filename");
+      inputs.render_pdf   = document.getElementById("render_pdf").checked ? "true" : "false";
+      inputs.slug       = "";
+    } else {
+      inputs.slug         = fd.get("slug");
+      inputs.pdf_filename = fd.get("slug"); // fallback stem for the ZIP filename
+      inputs.subtitle     = "";
+      inputs.tldr         = "";
+      inputs.doctype      = "";
+      inputs.docversion   = "";
+      inputs.render_pdf   = "false";
+    }
+
+    const dispatchedAt = Date.now();
+
+    // ── Dispatch via Worker ─────────────────────────────────────────────────
     try {
-      const resp = await fetch(`${API_BASE}/api/convert`, {
-        method: "POST",
-        body: fd,
+      const resp = await fetch(`${WORKER_URL}/dispatch`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ ref: "main", inputs }),
       });
-
-      if (!resp.ok) {
-        let detail = `Server error (${resp.status})`;
-        try {
-          const json = await resp.json();
-          detail = json.detail || detail;
-        } catch (_) {}
-        throw new Error(detail);
-      }
-
-      // Pull filename from Content-Disposition header
-      const cd = resp.headers.get("Content-Disposition") || "";
-      const match = cd.match(/filename="?([^";]+)"?/);
-      filename = match ? match[1] : (mode === "blog"
-        ? `${fd.get("slug") || "post"}.zip`
-        : `${fd.get("pdf_filename") || "output"}.zip`);
-
-      zip_blob = await resp.blob();
+      if (resp.status === 404) throw new Error("Workflow file not found on main branch.");
+      if (!resp.ok) throw new Error(`Dispatch failed (${resp.status}). Check the Worker is deployed.`);
     } catch (err) {
-      showError(err.message);
+      showError(err.message, null);
       setLoading(false);
       hideProgress();
       return;
     }
 
+    // ── Find run ID ─────────────────────────────────────────────────────────
+    let runId = null;
+    try {
+      runId = await findRunId(dispatchedAt);
+    } catch (err) {
+      showError(err.message, null);
+      setLoading(false);
+      return;
+    }
+
+    const REPO = "shakunasanaxe/docs-to-qmd";
+    if (actionsLink) {
+      actionsLink.href = `https://github.com/${REPO}/actions/runs/${runId}`;
+      actionsLink.hidden = false;
+    }
+
+    // ── Poll for output ZIP ─────────────────────────────────────────────────
+    const progressLabel = mode === "blog"
+      ? "Converting blog post (~1–2 min)…"
+      : "Converting document + rendering PDF (~3–5 min)…";
+    showProgress(progressLabel);
+
+    let success  = false;
+    const deadline = Date.now() + POLL_TIMEOUT;
+
+    while (Date.now() < deadline) {
+      await sleep(POLL_INTERVAL);
+
+      const status = await checkRunStatus(runId).catch(() => null);
+      if (status === "failure" || status === "cancelled") {
+        showError(
+          `GitHub Actions job ${status}. Check the log for details.`,
+          `https://github.com/${REPO}/actions/runs/${runId}`
+        );
+        setLoading(false);
+        return;
+      }
+      if (status === "success") {
+        showProgress("Job done — waiting for output to be published…");
+      }
+
+      const zipResp = await fetch(
+        `${WORKER_URL}/output-ready?token=${runToken}`,
+        { method: "HEAD", cache: "no-store" }
+      ).catch(() => null);
+
+      if (zipResp && zipResp.ok) { success = true; break; }
+    }
+
     setLoading(false);
     hideProgress();
-    showSuccess(zip_blob, filename);
+
+    if (!success) {
+      showError(
+        "Timed out waiting for output. The job may still be running — check GitHub Actions.",
+        `https://github.com/${REPO}/actions/runs/${runId || ""}`
+      );
+      return;
+    }
+
+    const stem = mode === "blog" ? inputs.slug : inputs.pdf_filename;
+    showSuccess(`${WORKER_URL}/download?token=${runToken}`, stem);
   });
+
+  // ── Worker helpers ───────────────────────────────────────────────────────────
+  async function findRunId(dispatchedAt) {
+    const deadline = Date.now() + FIND_RUN_TIMEOUT;
+    while (Date.now() < deadline) {
+      await sleep(FIND_RUN_INTERVAL);
+      const resp = await fetch(`${WORKER_URL}/find-run?after=${dispatchedAt}`).catch(() => null);
+      if (!resp || !resp.ok) continue;
+      const data = await resp.json();
+      if (data.id) return data.id;
+    }
+    throw new Error("Could not find the GitHub Actions run after 3 minutes. Check Actions manually.");
+  }
+
+  async function checkRunStatus(runId) {
+    const resp = await fetch(`${WORKER_URL}/run-status?run_id=${runId}`);
+    if (!resp.ok) return null;
+    const { status, conclusion } = await resp.json();
+    return status === "completed" ? conclusion : status;
+  }
 
   // ── Validation ──────────────────────────────────────────────────────────────
   function validateForm(mode) {
@@ -178,26 +270,29 @@
   }
 
   function hideProgress() { progressArea.hidden = true; }
-
   function hideResults() {
     resultArea.hidden = true;
     successCard.hidden = true;
     errorCard.hidden = true;
   }
 
-  function showSuccess(blob, filename) {
-    const url = URL.createObjectURL(blob);
-    const dlZip = document.getElementById("dlZip");
-    dlZip.href = url;
-    dlZip.download = filename;
-    resultMsg.innerHTML = `Your <strong>${filename}</strong> is ready — click to download.`;
+  function showSuccess(zipUrl, stem) {
+    dlZip.href = zipUrl;
+    dlZip.download = `${stem}.zip`;
+    resultMsg.innerHTML = `Your <strong>${stem}.zip</strong> is ready — click to download. Unzip and upload the folder to your publications repo.`;
     resultArea.hidden = false;
     successCard.hidden = false;
     resultArea.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  function showError(msg) {
+  function showError(msg, logsUrl) {
     errorMsg.textContent = msg;
+    if (logsUrl && errorActionsLink) {
+      errorActionsLink.href = logsUrl;
+      errorActionsLink.hidden = false;
+    } else if (errorActionsLink) {
+      errorActionsLink.hidden = true;
+    }
     resultArea.hidden = false;
     errorCard.hidden = false;
     resultArea.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -209,4 +304,5 @@
     window.scrollTo({ top: 0, behavior: "smooth" });
   });
 
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 })();
