@@ -4,22 +4,22 @@
 
 #let primary = rgb(97, 13, 61)
 
-// ── Aside / margin note ─────────────────────────────────────────────────────
-// Placed into the right margin (0.3 in gap + 2 in wide).
-#let aside(body) = place(
-  top + right,
-  float: false,
-  dx: 7.62mm,
-  box(width: 50.8mm)[
-    #line(length: 100%, stroke: 0.5pt + primary)
-    #v(2pt, weak: true)
-    #set text(fill: primary, size: 8pt, font: "TeX Gyre Pagella")
-    #set par(spacing: 0.5em)
-    #body
-    #v(2pt, weak: true)
-    #line(length: 100%, stroke: 0.5pt + primary)
-  ]
-)
+// ── Aside / sidenote ────────────────────────────────────────────────────────
+// Rendered as an inline callout block so it NEVER overlaps body text.
+// A thin left border and tinted background make it visually distinct.
+#let aside(body) = block(
+  width: 100%,
+  above: 1em,
+  below: 1em,
+  fill: rgb(249, 238, 245),
+  stroke: (left: 2.5pt + primary),
+  inset: (left: 10pt, right: 8pt, top: 7pt, bottom: 7pt),
+  radius: (right: 3pt),
+)[
+  #set text(fill: primary, size: 8.5pt, font: "TeX Gyre Pagella")
+  #set par(spacing: 0.55em, leading: 0.6em)
+  #body
+]
 
 // ── Main template function ──────────────────────────────────────────────────
 // Usage:
@@ -45,7 +45,7 @@
     numbering: none,
   )
   set text(fill: white, font: "TeX Gyre Pagella", size: 10pt)
-  set par(spacing: 0.65em, first-line-indent: 0pt)
+  set par(spacing: 0.9em, leading: 0.75em, first-line-indent: 0pt)
 
   // Logo (optional — renderer passes --input has-logo=true only when file exists)
   if sys.inputs.at("has-logo", default: "false") == "true" {
@@ -130,7 +130,9 @@
   )
 
   set text(fill: black, font: "Inter", size: 10pt)
-  set par(spacing: 0.65em, first-line-indent: 0pt)
+  // leading = line spacing within a paragraph; spacing = gap between paragraphs.
+  // These values match typical Google Docs 1.15 line spacing + space-after-para.
+  set par(spacing: 1.1em, leading: 0.75em, first-line-indent: 0pt)
 
   // ── Image / figure rules ───────────────────────────────────────────────
   // Global backstop: fit "contain" ensures aspect ratio is ALWAYS preserved —

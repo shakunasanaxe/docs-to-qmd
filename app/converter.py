@@ -173,17 +173,82 @@ def _para_to_inline_with_fn(para, get_fn_num) -> str:
 
 # ── Footnote extraction ────────────────────────────────────────────────────────
 
+def _fn_para_to_markdown(p_elem, rels: dict[str, str]) -> str:
+    """
+    Convert a footnote paragraph element to markdown text, preserving hyperlinks.
+    Handles w:r (plain runs), w:hyperlink (linked text), and w:ins (tracked inserts).
+    """
+    parts: list[str] = []
+
+    def _collect_runs(container) -> str:
+        """Concatenate all w:t text inside a container element."""
+        return "".join(
+            t.text
+            for r in container.findall(".//" + qn("w:r"))
+            for t in r.findall(qn("w:t"))
+            if t.text
+        )
+
+    for child in p_elem:
+        tag = child.tag
+
+        if tag == qn("w:r"):
+            for t in child.findall(qn("w:t")):
+                if t.text:
+                    parts.append(t.text)
+
+        elif tag == qn("w:hyperlink"):
+            r_id = child.get(qn("r:id"))
+            url = rels.get(r_id, "") if r_id else ""
+            link_text = _collect_runs(child)
+            if link_text and url:
+                parts.append(f"[{link_text}]({url})")
+            elif link_text:
+                parts.append(link_text)
+
+        elif tag == qn("w:ins"):
+            # Tracked-change insertion — extract its children normally
+            for sub in child:
+                if sub.tag == qn("w:r"):
+                    for t in sub.findall(qn("w:t")):
+                        if t.text:
+                            parts.append(t.text)
+                elif sub.tag == qn("w:hyperlink"):
+                    r_id = sub.get(qn("r:id"))
+                    url = rels.get(r_id, "") if r_id else ""
+                    link_text = _collect_runs(sub)
+                    if link_text and url:
+                        parts.append(f"[{link_text}]({url})")
+                    elif link_text:
+                        parts.append(link_text)
+
+    return "".join(parts).strip()
+
+
 def _extract_footnotes_from_bytes(docx_bytes: bytes) -> dict[int, str]:
     """
     Extract Word footnote text by reading word/footnotes.xml directly
     from the DOCX zip.  Bypasses python-docx relationship lookup entirely.
-    Returns {footnote_id: markdown_text}.
+    Returns {footnote_id: markdown_text} with hyperlinks rendered as [text](url).
     """
     footnotes: dict[int, str] = {}
     try:
         with zipfile.ZipFile(io.BytesIO(docx_bytes)) as z:
             if "word/footnotes.xml" not in z.namelist():
                 return footnotes
+
+            # Load footnote-part relationships so hyperlink URLs can be resolved
+            fn_rels: dict[str, str] = {}
+            rels_path = "word/_rels/footnotes.xml.rels"
+            if rels_path in z.namelist():
+                with z.open(rels_path) as rf:
+                    rels_root = etree.parse(rf).getroot()
+                    for rel in rels_root:
+                        r_id = rel.get("Id")
+                        target = rel.get("Target")
+                        if r_id and target:
+                            fn_rels[r_id] = target
+
             with z.open("word/footnotes.xml") as f:
                 fn_elem = etree.parse(f).getroot()
     except Exception:
@@ -201,12 +266,7 @@ def _extract_footnotes_from_bytes(docx_bytes: bytes) -> dict[int, str]:
             continue
         text_parts = []
         for p in fn.findall(qn("w:p")):
-            run_texts = []
-            for r in p.findall(".//" + qn("w:r")):
-                for t in r.findall(qn("w:t")):
-                    if t.text:
-                        run_texts.append(t.text)
-            para_text = "".join(run_texts).strip()
+            para_text = _fn_para_to_markdown(p, fn_rels)
             if para_text:
                 text_parts.append(para_text)
         footnotes[fn_id] = " ".join(text_parts)
@@ -216,23 +276,33 @@ def _extract_footnotes_from_bytes(docx_bytes: bytes) -> dict[int, str]:
 def _extract_footnotes(doc: Document) -> dict[int, str]:
     """Fallback footnote extraction via python-docx (used when raw bytes unavailable)."""
     footnotes: dict[int, str] = {}
-    fn_elem = None
+    fn_part = None
     try:
         fn_part = doc.part.footnotes_part
-        if fn_part is not None:
-            fn_elem = fn_part._element
     except Exception:
         pass
-    if fn_elem is None:
+    if fn_part is None:
         try:
             for rel in doc.part.rels.values():
                 if hasattr(rel, "reltype") and "footnote" in rel.reltype.lower():
-                    fn_elem = rel.target_part._element
+                    fn_part = rel.target_part
                     break
         except Exception:
             pass
-    if fn_elem is None:
+    if fn_part is None:
         return footnotes
+
+    fn_elem = fn_part._element
+
+    # Build relationship map for URL resolution
+    fn_rels: dict[str, str] = {}
+    try:
+        for r_id, rel in fn_part.rels.items():
+            if hasattr(rel, "target_ref"):
+                fn_rels[r_id] = rel.target_ref
+    except Exception:
+        pass
+
     for fn in fn_elem.findall(qn("w:footnote")):
         fn_id_str = fn.get(qn("w:id"))
         if fn_id_str is None:
@@ -245,12 +315,7 @@ def _extract_footnotes(doc: Document) -> dict[int, str]:
             continue
         text_parts = []
         for p in fn.findall(qn("w:p")):
-            run_texts = []
-            for r in p.findall(".//" + qn("w:r")):
-                for t in r.findall(qn("w:t")):
-                    if t.text:
-                        run_texts.append(t.text)
-            para_text = "".join(run_texts).strip()
+            para_text = _fn_para_to_markdown(p, fn_rels)
             if para_text:
                 text_parts.append(para_text)
         footnotes[fn_id] = " ".join(text_parts)
