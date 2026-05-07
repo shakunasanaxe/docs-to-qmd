@@ -122,10 +122,13 @@ def _convert_body(body: str) -> str:
         if m:
             alt = m.group(1)
             path = m.group(2)
+            # fit: "contain" preserves aspect ratio — never crops or distorts.
+            # width: 100% fills the text column; height is calculated automatically.
+            img = f'image("{path}", width: 100%, fit: "contain")'
             if alt:
-                result.append(f'#figure(image("{path}", width: 100%), caption: [{_escape(alt)}])')
+                result.append(f'#figure({img}, caption: [{_escape(alt)}])')
             else:
-                result.append(f'#figure(image("{path}", width: 100%))')
+                result.append(f'#figure({img})')
             i += 1
             continue
 

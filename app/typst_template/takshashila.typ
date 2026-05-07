@@ -132,6 +132,21 @@
   set text(fill: black, font: "Inter", size: 10pt)
   set par(spacing: 0.65em, first-line-indent: 0pt)
 
+  // ── Image / figure rules ───────────────────────────────────────────────
+  // Global backstop: fit "contain" ensures aspect ratio is ALWAYS preserved —
+  // no cropping, no squeezing, ever.
+  set image(fit: "contain")
+
+  // Add breathing room around every figure.
+  show figure: it => block(width: 100%, breakable: false)[
+    #v(1em, weak: true)
+    #it
+    #v(1em, weak: true)
+  ]
+
+  // Caption: smaller, italic, grey.
+  show figure.caption: set text(size: 8.5pt, style: "italic", fill: rgb(90, 90, 90))
+
   show heading.where(level: 1): it => block[
     #v(1em, weak: true)
     #text(size: 13pt, weight: "bold", fill: primary, it.body)
