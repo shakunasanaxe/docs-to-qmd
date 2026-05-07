@@ -142,3 +142,25 @@ def render_and_zip(
 
         buf.seek(0)
         return buf.read()
+
+
+def zip_blog(qmd_content: str, images_dir: Path, slug: str) -> bytes:
+    """
+    Package a blog QMD + its images into a ZIP (no PDF, no template files).
+
+    Args:
+        qmd_content: Full text of the .qmd file.
+        images_dir:  Directory containing extracted images.
+        slug:        Filename stem (e.g. "my-blog-post").
+
+    Returns:
+        Raw bytes of the ZIP archive.
+    """
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(f"{slug}.qmd", qmd_content.encode("utf-8"))
+        if images_dir.exists():
+            for img in images_dir.iterdir():
+                zf.write(img, arcname=f"images/{img.name}")
+    buf.seek(0)
+    return buf.read()

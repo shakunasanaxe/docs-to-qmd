@@ -18,8 +18,8 @@ from docx import Document
 import tempfile
 
 from gdocs import fetch_docx
-from converter import convert
-from renderer import render_and_zip, TypstNotFoundError, RenderError
+from converter import convert, convert_blog
+from renderer import render_and_zip, zip_blog, TypstNotFoundError, RenderError
 
 STATIC_DIR = Path(__file__).parent.parent / "static"
 
@@ -43,6 +43,7 @@ def health():
 @app.post("/api/convert")
 async def api_convert(
     google_doc_url: str = Form(...),
+    mode: str = Form("paper"),          # "paper" or "blog"
     title: str = Form(...),
     subtitle: str = Form(""),
     authors: str = Form(...),
@@ -51,7 +52,8 @@ async def api_convert(
     categories: str = Form(""),
     doctype: str = Form(""),
     docversion: str = Form(""),
-    pdf_filename: str = Form(...),
+    pdf_filename: str = Form(""),       # required for paper
+    slug: str = Form(""),               # required for blog
     render_pdf: bool = Form(True),
 ):
     # ── 1. Fetch DOCX ──────────────────────────────────────────────────────
@@ -72,7 +74,39 @@ async def api_convert(
     finally:
         docx_path.unlink(missing_ok=True)
 
-    # ── 3. Convert DOCX → QMD ──────────────────────────────────────────────
+    # ── 3. Blog mode ───────────────────────────────────────────────────────
+    if mode == "blog":
+        if not slug:
+            raise HTTPException(status_code=400, detail="slug is required for blog mode.")
+        with tempfile.TemporaryDirectory() as img_tmp:
+            images_dir = Path(img_tmp) / "images"
+            images_dir.mkdir()
+            meta = {
+                "title": title,
+                "authors": authors,
+                "date": date,
+                "categories": categories,
+            }
+            try:
+                qmd_content = convert_blog(doc, meta, slug, images_dir, docx_bytes=docx_bytes)
+            except Exception as exc:
+                raise HTTPException(status_code=500, detail=f"Conversion error: {exc}")
+
+            try:
+                zip_bytes = zip_blog(qmd_content, images_dir, slug)
+            except Exception as exc:
+                raise HTTPException(status_code=500, detail=f"Packaging error: {exc}")
+
+        return Response(
+            content=zip_bytes,
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{slug}.zip"'},
+        )
+
+    # ── 4. Paper mode: Convert DOCX → QMD ─────────────────────────────────
+    if not pdf_filename:
+        raise HTTPException(status_code=400, detail="pdf_filename is required for paper mode.")
+
     with tempfile.TemporaryDirectory() as img_tmp:
         images_dir = Path(img_tmp) / "images"
         images_dir.mkdir()
@@ -93,7 +127,7 @@ async def api_convert(
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"Conversion error: {exc}")
 
-        # ── 4. Render PDF + zip ───────────────────────────────────────────
+        # ── 5. Render PDF + zip ───────────────────────────────────────────
         try:
             zip_bytes = render_and_zip(
                 qmd_content=qmd_content,

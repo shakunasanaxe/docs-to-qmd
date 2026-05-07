@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Takshashila QMD Converter — powered by Typst</title>
+  <title>Takshashila QMD Converter</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -25,9 +25,32 @@
   <main>
     <form id="convertForm" novalidate>
 
+      <!-- ── Step 0: Document type ──────────────────────────────────────────── -->
+      <section class="card">
+        <h2><span class="step">1</span> Document Type</h2>
+        <div class="doctype-toggle">
+          <label class="doctype-option">
+            <input type="radio" name="mode" value="paper" checked />
+            <span class="doctype-btn">
+              <span class="toggle-icon">📄</span>
+              <span class="toggle-label">Research Paper</span>
+              <span class="toggle-sub">QMD + PDF via Typst (~3–5 min)</span>
+            </span>
+          </label>
+          <label class="doctype-option">
+            <input type="radio" name="mode" value="blog" />
+            <span class="doctype-btn">
+              <span class="toggle-icon">✍️</span>
+              <span class="toggle-label">Blog Post</span>
+              <span class="toggle-sub">QMD only (~1–2 min)</span>
+            </span>
+          </label>
+        </div>
+      </section>
+
       <!-- ── Step 1: Google Doc URL ─────────────────────────────────────────── -->
       <section class="card">
-        <h2><span class="step">1</span> Google Doc URL</h2>
+        <h2><span class="step">2</span> Google Doc URL</h2>
         <div class="tip">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M18 10A8 8 0 1 1 2 10a8 8 0 0 1 16 0Zm-7-4a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM9 9a.75.75 0 0 0 0 1.5h.253a.25.25 0 0 1 .244.304l-.459 2.066A1.75 1.75 0 0 0 10.747 15H11a.75.75 0 0 0 0-1.5h-.253a.25.25 0 0 1-.244-.304l.459-2.066A1.75 1.75 0 0 0 9.253 9H9Z" clip-rule="evenodd" /></svg>
           The document must be shared as <strong>Anyone with the link can view</strong> (Share → Change → Anyone with the link).
@@ -42,9 +65,9 @@
         />
       </section>
 
-      <!-- ── Step 2: Paper metadata ──────────────────────────────────────────── -->
+      <!-- ── Step 2: Metadata ───────────────────────────────────────────────── -->
       <section class="card">
-        <h2><span class="step">2</span> Paper Metadata</h2>
+        <h2><span class="step">3</span> Metadata</h2>
         <p class="card-desc">These fields populate the YAML frontmatter of the .qmd file.</p>
 
         <div class="field-grid">
@@ -53,7 +76,7 @@
             <input type="text" id="title" name="title" placeholder="European Rearmament" required />
           </div>
 
-          <div class="field full">
+          <div class="field full paper-only">
             <label for="subtitle">Subtitle</label>
             <input type="text" id="subtitle" name="subtitle" placeholder="Precursors, Policies, and Possibilities for India" />
           </div>
@@ -73,17 +96,17 @@
             <input type="text" id="categories" name="categories" placeholder="Defence, Indian Foreign Policy" />
           </div>
 
-          <div class="field full">
+          <div class="field full paper-only">
             <label for="tldr">TL;DR summary</label>
             <textarea id="tldr" name="tldr" rows="3" placeholder="A one-sentence summary shown on the website card."></textarea>
           </div>
 
-          <div class="field">
+          <div class="field paper-only">
             <label for="doctype">Document type</label>
             <input type="text" id="doctype" name="doctype" placeholder="Takshashila Discussion Document 2025-06" />
           </div>
 
-          <div class="field">
+          <div class="field paper-only">
             <label for="docversion">Version</label>
             <input type="text" id="docversion" name="docversion" placeholder="Version 1.0, March 2026" />
           </div>
@@ -92,28 +115,46 @@
 
       <!-- ── Step 3: Output settings ────────────────────────────────────────── -->
       <section class="card">
-        <h2><span class="step">3</span> Output Settings</h2>
+        <h2><span class="step">4</span> <span class="step3-title">Output Settings</span></h2>
 
-        <div class="field">
-          <label for="pdf_filename">Output filename stem <span class="req">*</span></label>
-          <div class="filename-row">
-            <input type="text" id="pdf_filename" name="pdf_filename"
-              placeholder="EU-Rearm-India-09032026" required
-              pattern="[A-Za-z0-9_\-]+"
-              title="Letters, numbers, hyphens and underscores only" />
-            <span class="filename-ext">.qmd / .pdf</span>
+        <!-- Paper only -->
+        <div class="paper-only">
+          <div class="field">
+            <label for="pdf_filename">Output filename stem <span class="req">*</span></label>
+            <div class="filename-row">
+              <input type="text" id="pdf_filename" name="pdf_filename"
+                placeholder="EU-Rearm-India-09032026"
+                pattern="[A-Za-z0-9_\-]+"
+                title="Letters, numbers, hyphens and underscores only" />
+              <span class="filename-ext">.qmd / .pdf</span>
+            </div>
+            <p class="field-hint">Use the format <code>ShortTitle-DDMMYYYY</code>. No spaces.</p>
           </div>
-          <p class="field-hint">Use the format <code>ShortTitle-DDMMYYYY</code>. No spaces.</p>
+
+          <div class="checkbox-row">
+            <input type="checkbox" id="render_pdf" name="render_pdf" checked />
+            <label for="render_pdf">Render PDF (powered by Typst)</label>
+          </div>
         </div>
 
-        <div class="checkbox-row">
-          <input type="checkbox" id="render_pdf" name="render_pdf" checked />
-          <label for="render_pdf">Render PDF (powered by Typst)</label>
+        <!-- Blog only -->
+        <div class="blog-only" style="display:none">
+          <div class="field">
+            <label for="slug">URL slug <span class="req">*</span></label>
+            <div class="filename-row">
+              <input type="text" id="slug" name="slug"
+                placeholder="my-blog-post-title"
+                pattern="[A-Za-z0-9_\-]+"
+                title="Letters, numbers, hyphens and underscores only" />
+              <span class="filename-ext">.qmd</span>
+            </div>
+            <p class="field-hint">Lowercase, hyphens only. Matches the blog post URL slug.</p>
+          </div>
         </div>
       </section>
 
       <!-- ── Aside tip ───────────────────────────────────────────────────────── -->
-      <section class="card aside-guide">
+      <section class="card aside-guide paper-only">
         <h2>Aside / Sidenote Guide</h2>
         <p>To mark a sidenote in your Google Doc, wrap the text with <code>[aside]</code> and <code>[/aside]</code> on their own lines (or at the start/end of a paragraph):</p>
         <pre>[aside]
@@ -137,9 +178,6 @@ Bond Credit Ratings such as AAA (highest)…
     <div id="progressArea" hidden>
       <section class="card progress-card">
         <p id="progressMsg" class="progress-msg"></p>
-        <a id="actionsLink" href="#" target="_blank" rel="noopener" class="btn-text" hidden>
-          View job on GitHub Actions →
-        </a>
       </section>
     </div>
 
@@ -150,7 +188,7 @@ Bond Credit Ratings such as AAA (highest)…
         <h2>Done!</h2>
         <p id="resultMsg"></p>
         <div class="download-buttons">
-          <a id="dlZip" href="#" class="btn-primary" download>Download .zip (QMD + PDF + images)</a>
+          <a id="dlZip" href="#" class="btn-primary" download>Download .zip</a>
         </div>
         <button class="btn-text" id="convertAnother">Convert another document →</button>
       </section>
@@ -159,9 +197,6 @@ Bond Credit Ratings such as AAA (highest)…
         <div class="result-icon error-icon">✕</div>
         <h2>Something went wrong</h2>
         <p id="errorMsg" class="error-text"></p>
-        <a id="errorActionsLink" href="#" target="_blank" rel="noopener" class="btn-secondary" hidden>
-          View error log on GitHub →
-        </a>
         <button class="btn-text" id="tryAgainBtn" style="margin-top:1rem">Try again</button>
       </section>
     </div>
@@ -169,7 +204,7 @@ Bond Credit Ratings such as AAA (highest)…
 
   <footer>
     <p>Internal tool — Takshashila Institution &nbsp;·&nbsp;
-      <a href="https://github.com/AshwinPrasadRao/Takshashila-webpub" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/AshwinPrasadRao/docs-to-qmd" target="_blank" rel="noopener">GitHub</a>
     </p>
   </footer>
 

@@ -620,3 +620,137 @@ def _process_asides(lines: list[str]) -> list[str]:
         result.append("")
 
     return result
+
+
+# ── Blog conversion ───────────────────────────────────────────────────────────
+
+def build_blog_frontmatter(meta: dict, slug: str) -> str:
+    """Build minimal YAML frontmatter for a blog post."""
+    authors = [a.strip() for a in meta.get("authors", "").split(",") if a.strip()]
+    categories = [c.strip() for c in meta.get("categories", "").split(",") if c.strip()]
+
+    lines = ["---"]
+    lines.append(f'title: {meta["title"]}')
+    if authors:
+        lines.append("author:")
+        for a in authors:
+            lines.append(f"  - {a}")
+    if meta.get("date"):
+        lines.append(f'date: "{meta["date"]}"')
+    if categories:
+        lines.append("categories:")
+        for c in categories:
+            lines.append(f"  - {c}")
+    lines.append("---")
+    return "\n".join(lines)
+
+
+def convert_blog(
+    doc: Document,
+    meta: dict,
+    slug: str,
+    images_dir: Path,
+    docx_bytes: Optional[bytes] = None,
+) -> str:
+    """
+    Convert a python-docx Document to a blog QMD string (no PDF template,
+    no download button, no asides).  Extracted images saved into images_dir.
+    """
+    if docx_bytes is not None:
+        word_footnotes = _extract_footnotes_from_bytes(docx_bytes)
+    else:
+        word_footnotes = _extract_footnotes(doc)
+
+    img_prefix = slug
+    image_refs = _extract_images(doc, img_prefix)
+    for img in image_refs:
+        (images_dir / img.filename).write_bytes(img.blob)
+
+    para_to_images: dict[int, list[ImageRef]] = {}
+    for img in image_refs:
+        para_to_images.setdefault(img.para_index, []).append(img)
+
+    fn_map: dict[int, int] = {}
+    fn_counter = [0]
+
+    def get_fn_num(word_id: int) -> int:
+        if word_id not in fn_map:
+            fn_counter[0] += 1
+            fn_map[word_id] = fn_counter[0]
+        return fn_map[word_id]
+
+    authors_list = [a.strip() for a in meta.get("authors", "").split(",") if a.strip()]
+    skip_exact = {meta.get("title", "").strip()}
+    skip_exact.update(authors_list)
+    skip_exact.discard("")
+
+    raw_lines: list[str] = []
+    seen_heading = False
+
+    for para_idx, para in enumerate(doc.paragraphs):
+        for img in para_to_images.get(para_idx, []):
+            raw_lines.append("")
+            raw_lines.append(f"![](images/{img.filename}){{width=100%}}")
+            raw_lines.append("")
+
+        style_name = para.style.name if para.style else "Normal"
+        text = para.text.strip()
+
+        if not text:
+            raw_lines.append("")
+            continue
+
+        if text in skip_exact and not seen_heading:
+            continue
+
+        if _is_passthrough(text):
+            raw_lines.append(text)
+            continue
+
+        if _is_implicit_heading(para):
+            seen_heading = True
+            raw_lines.append(f"## {text}")
+            continue
+
+        if style_name in HEADING_MAP:
+            seen_heading = True
+            hdr = _extract_literal_heading(text)
+            if hdr:
+                lvl_prefix, heading_text = hdr
+                raw_lines.append(f"{lvl_prefix} {heading_text}")
+            else:
+                prefix = HEADING_MAP[style_name]
+                inline = _para_to_inline_with_fn(para, get_fn_num)
+                raw_lines.append(f"{prefix} {_strip_emphasis(inline)}")
+            continue
+
+        if style_name in SKIP_STYLES:
+            continue
+
+        list_marker = _get_list_marker(para)
+        if list_marker:
+            inline = _para_to_inline_with_fn(para, get_fn_num)
+            raw_lines.append(f"{list_marker}{inline}")
+            continue
+
+        inline = _para_to_inline_with_fn(para, get_fn_num)
+        raw_lines.append(inline if inline else "")
+
+    # Footnote block
+    fn_block_lines: list[str] = []
+    if fn_map:
+        fn_block_lines.append("")
+        for word_id, seq_num in sorted(fn_map.items(), key=lambda x: x[1]):
+            fn_text = word_footnotes.get(word_id, "")
+            fn_block_lines.append(f"[^{seq_num}]: {fn_text}")
+
+    processed = _process_asides(raw_lines)
+    body = "\n".join(processed).strip()
+    fn_block = "\n".join(fn_block_lines)
+
+    frontmatter = build_blog_frontmatter(meta, slug)
+    parts = [frontmatter, "", body]
+    if fn_block.strip():
+        parts.append(fn_block)
+
+    return "\n".join(parts)
