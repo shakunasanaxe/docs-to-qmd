@@ -48,6 +48,44 @@
         </div>
       </section>
 
+      <!-- ── How it works ───────────────────────────────────────────────────── -->
+      <details class="card how-it-works">
+        <summary>
+          <span class="how-icon">📖</span>
+          <span>How it works &amp; Google Docs conventions</span>
+        </summary>
+        <div class="how-body">
+          <h3>Workflow</h3>
+          <ol>
+            <li>Write your paper or blog post in Google Docs using normal heading styles, Google footnotes, and optionally <code>[aside]</code> / <code>[/aside]</code> tags for sidenotes.</li>
+            <li>Set share permissions to <strong>Anyone with the link can view</strong> (Share → Change → Anyone with the link).</li>
+            <li>Paste the URL into this converter, fill in the metadata form, and click <strong>Convert</strong>.</li>
+            <li>Download the <code>.zip</code> containing:
+              <ul>
+                <li><code>{filename}.qmd</code> — ready to upload to the publications repo</li>
+                <li><code>assets/{filename}.pdf</code> — the rendered PDF <span class="paper-badge">Paper only</span></li>
+                <li><code>images/</code> — all extracted images</li>
+              </ul>
+            </li>
+          </ol>
+          <h3>Google Docs conventions</h3>
+          <table class="conventions-table">
+            <thead>
+              <tr><th>Feature</th><th>How to write it</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Headings</td><td>Use Google Docs heading styles (Heading 1, Heading 2, Heading 3)</td></tr>
+              <tr><td>Bold / Italic</td><td>Normal Google Docs bold / italic</td></tr>
+              <tr><td>Links</td><td>Normal hyperlinks</td></tr>
+              <tr><td>Footnotes</td><td>Insert → Footnote in Google Docs</td></tr>
+              <tr><td>Sidenotes / asides</td><td>Wrap text in <code>[aside]</code> and <code>[/aside]</code> on their own lines</td></tr>
+              <tr><td>Images</td><td>Insert normally; add a short caption as the paragraph immediately after</td></tr>
+              <tr><td>Quarto power users</td><td>Can write <code>:::{.aside}</code>, <code>[^N]</code>, etc. directly — these are passed through unchanged</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
+
       <!-- ── Step 1: Google Doc URL ─────────────────────────────────────────── -->
       <section class="card">
         <h2><span class="step">2</span> Google Doc URL</h2>
@@ -162,46 +200,6 @@ Bond Credit Ratings such as AAA (highest)…
 [/aside]</pre>
         <p>Power users can also write <code>:::{.aside}</code> … <code>:::</code> directly — it will be passed through unchanged.</p>
       </section>
-
-      <!-- ── How it works ───────────────────────────────────────────────────── -->
-      <details class="card how-it-works">
-        <summary>
-          <span class="how-icon">📖</span>
-          <span>How it works &amp; Google Docs conventions</span>
-        </summary>
-
-        <div class="how-body">
-          <h3>Workflow</h3>
-          <ol>
-            <li>Write your paper or blog post in Google Docs using normal heading styles, Google footnotes, and optionally <code>[aside]</code> / <code>[/aside]</code> tags for sidenotes.</li>
-            <li>Set share permissions to <strong>Anyone with the link can view</strong> (Share → Change → Anyone with the link).</li>
-            <li>Paste the URL into this converter, fill in the metadata form, and click <strong>Convert</strong>.</li>
-            <li>Download the <code>.zip</code> containing:
-              <ul>
-                <li><code>{filename}.qmd</code> — ready to upload to the publications repo</li>
-                <li><code>assets/{filename}.pdf</code> — the rendered PDF <span class="paper-badge">Paper only</span></li>
-                <li><code>images/</code> — all extracted images</li>
-              </ul>
-            </li>
-          </ol>
-
-          <h3>Google Docs conventions</h3>
-          <table class="conventions-table">
-            <thead>
-              <tr><th>Feature</th><th>How to write it</th></tr>
-            </thead>
-            <tbody>
-              <tr><td>Headings</td><td>Use Google Docs heading styles (Heading 1, Heading 2, Heading 3)</td></tr>
-              <tr><td>Bold / Italic</td><td>Normal Google Docs bold / italic</td></tr>
-              <tr><td>Links</td><td>Normal hyperlinks</td></tr>
-              <tr><td>Footnotes</td><td>Insert → Footnote in Google Docs</td></tr>
-              <tr><td>Sidenotes / asides</td><td>Wrap text in <code>[aside]</code> and <code>[/aside]</code> on their own lines</td></tr>
-              <tr><td>Images</td><td>Insert normally; add a short caption as the paragraph immediately after</td></tr>
-              <tr><td>Quarto power users</td><td>Can write <code>:::{.aside}</code>, <code>[^N]</code>, etc. directly — these are passed through unchanged</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </details>
 
       <!-- ── Submit ──────────────────────────────────────────────────────────── -->
       <div class="submit-row">
