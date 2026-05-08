@@ -420,6 +420,8 @@ code {
   border-top-color: #fff;
   border-radius: 50%;
   animation: spin .7s linear infinite;
+}
+.spinner:not([hidden]) {
   display: inline-block;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
